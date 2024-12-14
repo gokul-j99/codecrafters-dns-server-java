@@ -14,8 +14,9 @@ public class Main {
                 serverSocket.receive(packet);
                 System.out.println("Received query");
 
-                // Extract the domain name from the received packet
-                String domainName = "google.com"; // Static domain for simplicity
+                // Parse the domain name from the request
+                String domainName = extractDomainName(buf);
+                System.out.println("Extracted domain name: " + domainName);
 
                 // Crafting the DNS response header + question
                 byte[] response = createDnsResponse(domainName);
@@ -28,6 +29,28 @@ public class Main {
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
+    }
+
+    /**
+     * Extracts the domain name from the DNS query packet.
+     * @param request The byte array representing the DNS query packet.
+     * @return The extracted domain name.
+     */
+    private static String extractDomainName(byte[] request) {
+        StringBuilder domainName = new StringBuilder();
+        int index = 12; // Domain name starts after the 12-byte header
+
+        while (request[index] != 0) {
+            int labelLength = request[index++];
+            for (int i = 0; i < labelLength; i++) {
+                domainName.append((char) request[index++]);
+            }
+            if (request[index] != 0) {
+                domainName.append(".");
+            }
+        }
+
+        return domainName.toString();
     }
 
     /**

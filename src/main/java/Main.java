@@ -18,83 +18,115 @@ public class Main {
                 DNSHeader requestHeader = parseHeader(buf);
                 System.out.println("Parsed Header: ID=" + requestHeader.id);
 
+                // Parse the domain name from the request
+                String domainName = extractDomainName(buf);
+                System.out.println("Extracted domain name: " + domainName);
+
                 // Crafting the DNS response
-                byte[] response = createDnsResponse(requestHeader);
+                byte[] response = createDnsResponse(requestHeader, domainName);
 
                 // Preparing the response packet
                 final DatagramPacket responsePacket = new DatagramPacket(response, response.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
-                System.out.println("Sent response with dynamic header");
+                System.out.println("Sent response with dynamic header and question section");
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
     }
 
-    /**
-     * Parses the header of the DNS request packet.
-     * @param request The byte array representing the DNS query packet.
-     * @return A DNSHeader object containing the parsed values.
-     */
     private static DNSHeader parseHeader(byte[] request) {
         DNSHeader header = new DNSHeader();
 
-        // Packet ID
         header.id = (short) ((request[0] << 8) | (request[1] & 0xFF));
-
-        // QR, OPCODE, AA, TC, RD
         header.qr = (request[2] >> 7) & 0x01;
         header.opcode = (request[2] >> 3) & 0x0F;
         header.rd = request[2] & 0x01;
-
-        // RA, Z, RCODE
         header.rcode = request[3] & 0x0F;
 
         return header;
     }
 
-    /**
-     * Creates a DNS response including a dynamic header based on the request.
-     * @param requestHeader The header parsed from the DNS request.
-     * @return The byte array representing the DNS response.
-     */
-    private static byte[] createDnsResponse(DNSHeader requestHeader) {
+    private static String extractDomainName(byte[] request) {
+        StringBuilder domainName = new StringBuilder();
+        int index = 12; // Domain name starts after the 12-byte header
+
+        while (request[index] != 0) {
+            int labelLength = request[index++];
+            for (int i = 0; i < labelLength; i++) {
+                domainName.append((char) request[index++]);
+            }
+            if (request[index] != 0) {
+                domainName.append(".");
+            }
+        }
+
+        return domainName.toString();
+    }
+
+    private static byte[] createDnsResponse(DNSHeader requestHeader, String domainName) {
         // Header is 12 bytes long
         byte[] header = new byte[12];
 
-        // Packet Identifier (ID) - Mimic the ID from the request
-        header[0] = (byte) (requestHeader.id >> 8); // High byte
-        header[1] = (byte) (requestHeader.id & 0xFF); // Low byte
+        // Packet Identifier (ID)
+        header[0] = (byte) (requestHeader.id >> 8);
+        header[1] = (byte) (requestHeader.id & 0xFF);
 
-        // QR = 1 (response), mimic OPCODE, AA = 0, TC = 0, mimic RD
+        // QR = 1 (response), OPCODE = mimic request, AA = 0, TC = 0, RD = mimic request
         header[2] = (byte) ((1 << 7) | (requestHeader.opcode << 3) | (0 << 2) | (0 << 1) | requestHeader.rd);
 
-        // RA = 0, Z = 0, RCODE = 0 (if standard query), else 4 (not implemented)
-        int rcode = (requestHeader.opcode == 0) ? 0 : 4;
-        header[3] = (byte) ((0 << 7) | (0 << 4) | rcode);
+        // RA = 0, Z = 0, RCODE = 0 (no error)
+        header[3] = (byte) ((0 << 7) | (0 << 4) | 0);
 
-        // QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT (set to 1 for simplicity)
-        header[4] = 0x00; // QDCOUNT high byte
-        header[5] = 0x01; // QDCOUNT low byte
+        // QDCOUNT = 1
+        header[4] = 0x00;
+        header[5] = 0x01;
+
+        // ANCOUNT = 0, NSCOUNT = 0, ARCOUNT = 0 (no answers for now)
         header[6] = 0x00; // ANCOUNT high byte
-        header[7] = 0x01; // ANCOUNT low byte
+        header[7] = 0x00; // ANCOUNT low byte
         header[8] = 0x00; // NSCOUNT high byte
         header[9] = 0x00; // NSCOUNT low byte
         header[10] = 0x00; // ARCOUNT high byte
         header[11] = 0x00; // ARCOUNT low byte
 
-        // Return the response header
-        return header;
+        // Question section: Name + Type + Class
+        byte[] question = encodeDomainName(domainName);
+        byte[] typeAndClass = new byte[4];
+        typeAndClass[0] = 0x00; // Type high byte (A record = 1)
+        typeAndClass[1] = 0x01; // Type low byte
+        typeAndClass[2] = 0x00; // Class high byte (IN = 1)
+        typeAndClass[3] = 0x01; // Class low byte
+
+        // Combine header and question section
+        byte[] response = new byte[header.length + question.length + typeAndClass.length];
+        System.arraycopy(header, 0, response, 0, header.length);
+        System.arraycopy(question, 0, response, header.length, question.length);
+        System.arraycopy(typeAndClass, 0, response, header.length + question.length, typeAndClass.length);
+
+        return response;
     }
 
-    /**
-     * A helper class to store DNS header values.
-     */
+    private static byte[] encodeDomainName(String domainName) {
+        String[] labels = domainName.split("\\.");
+        byte[] encoded = new byte[domainName.length() + 2]; // Add 2 for label lengths and null terminator
+        int index = 0;
+
+        for (String label : labels) {
+            encoded[index++] = (byte) label.length();
+            for (char c : label.toCharArray()) {
+                encoded[index++] = (byte) c;
+            }
+        }
+        encoded[index] = 0x00; // Null byte to terminate the domain name
+        return encoded;
+    }
+
     static class DNSHeader {
-        short id;    // Packet ID
-        int qr;      // Query/Response Indicator
-        int opcode;  // Operation Code
-        int rd;      // Recursion Desired
-        int rcode;   // Response Code
+        short id;
+        int qr;
+        int opcode;
+        int rd;
+        int rcode;
     }
 }

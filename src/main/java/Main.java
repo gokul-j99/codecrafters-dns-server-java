@@ -75,8 +75,9 @@ public class Main {
         // QR = 1 (response), OPCODE = mimic request, AA = 0, TC = 0, RD = mimic request
         header[2] = (byte) ((1 << 7) | (requestHeader.opcode << 3) | (0 << 2) | (0 << 1) | requestHeader.rd);
 
-        // RA = 0, Z = 0, RCODE = 0 (no error)
-        header[3] = (byte) ((0 << 7) | (0 << 4) | 0);
+        // RA = 0, Z = 0, RCODE = conditional (0 for standard query, 4 otherwise)
+        int rcode = (requestHeader.opcode == 0) ? 0 : 4;
+        header[3] = (byte) ((0 << 7) | (0 << 4) | rcode);
 
         // QDCOUNT = 1
         header[4] = 0x00;
@@ -106,6 +107,9 @@ public class Main {
 
         return response;
     }
+
+
+
 
     private static byte[] encodeDomainName(String domainName) {
         String[] labels = domainName.split("\\.");

@@ -3,17 +3,16 @@ import java.io.IOException;
 
 public class DnsAnswer {
 
-    public static byte[] answer(String domain, int type, int clazz) throws IOException {
-        final var domainBytes = DnsMessage.encodeDomain(domain);
-        final var output = new ByteArrayOutputStream();
-        output.write(domainBytes); // Encoded domain name
+    public static byte[] answer(String domain, short type, short clazz, int ttl, byte[] ip) throws IOException {
+        var output = new ByteArrayOutputStream();
+        output.write(DnsMessage.encodeDomain(domain)); // Encoded domain name
         output.write(new byte[]{
-                (byte) ((type >> 8) & 0xFF), (byte) (type & 0xFF), // TYPE
-                (byte) ((clazz >> 8) & 0xFF), (byte) (clazz & 0xFF), // CLASS
-                0x00, 0x00, 0x00, 0x3C, // TTL (60 seconds)
-                0x00, 0x04, // RDLENGTH (4 bytes for IPv4)
-                (byte) 192, (byte) 168, (byte) 1, (byte) 1 // RDATA (IP Address)
+                (byte) (type >> 8), (byte) (type & 0xFF), // TYPE
+                (byte) (clazz >> 8), (byte) (clazz & 0xFF), // CLASS
+                (byte) (ttl >> 24), (byte) (ttl >> 16), (byte) (ttl >> 8), (byte) ttl, // TTL
+                (byte) 0x00, (byte) 0x04, // RDLENGTH
         });
+        output.write(ip); // RDATA (IP address)
         return output.toByteArray();
     }
 }

@@ -15,9 +15,12 @@ public final class DnsMessage {
         final var id = ByteBuffer.wrap(received, 0, 2).order(BIG_ENDIAN).getShort();
         final var receivedSecondLine = ByteBuffer.wrap(received, 2, 2).order(BIG_ENDIAN).getShort();
 
+        // Extract and preserve Opcode
+        int opcode = (receivedSecondLine >> 11) & 0x0F; // Opcode is bits 11-14
+
         // Build the response header
         int secondLine = 1 << 15; // QR (Response)
-        secondLine = setBits(secondLine, receivedSecondLine & OPCODE); // Copy OPCODE
+        secondLine = setBits(secondLine, opcode << 11); // Preserve Opcode
         secondLine = setBits(secondLine, receivedSecondLine & RD); // Copy RD
         secondLine = setBits(secondLine, RCODE); // Set RCODE (example)
 

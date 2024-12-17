@@ -11,6 +11,7 @@ public final class DnsMessage {
     private static final int RD = 1 << 8; // Recursion Desired
     private static final int RCODE = 0;  // No Error
 
+
     public static byte[] headerWithAnswerCount(byte[] received, int answerCount, int rcode) throws IOException {
         try (var inputStream = new ByteArrayInputStream(received);
              var dataInputStream = new DataInputStream(inputStream)) {
@@ -74,6 +75,17 @@ public final class DnsMessage {
         int opcode = (flags >> 11) & 0x0F; // Extract OPCODE (bits 11-14)
         return opcode != 0; // Unsupported if OPCODE is not 0 (standard query)
     }
+
+
+    public static int getOpcode(byte[] received) throws IOException {
+        try (var inputStream = new ByteArrayInputStream(received);
+             var dataInputStream = new DataInputStream(inputStream)) {
+            dataInputStream.readShort(); // Skip ID
+            short flags = dataInputStream.readShort();
+            return (flags >> 11) & 0x0F; // Extract OPCODE (bits 11-14)
+        }
+    }
+
 
 
     public record Question(String name, short type, short clazz) {}

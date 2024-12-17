@@ -7,7 +7,7 @@ public class Main {
     public static void main(String[] args) {
         try (var serverSocket = new DatagramSocket(2053)) {
             while (true) {
-                // Buffer to receive the packet
+                // Buffer to receive the incoming query
                 var buf = new byte[512];
                 var packet = new DatagramPacket(buf, buf.length);
                 serverSocket.receive(packet);
@@ -24,37 +24,25 @@ public class Main {
                 // Build the question section for the response
                 var questionPacket = DnsQuestion.question(question);
 
-                // Check if the query is for QTYPE = 1 (A record) and QCLASS = 1 (IN)
-                boolean supportedQuery = question.type() == 1 && question.clazz() == 1;
+                // Build the answer section
+                var answerPacket = DnsAnswer.answer(
+                        question.name(),      // Domain name
+                        question.type(),      // QTYPE
+                        question.clazz(),     // QCLASS
+                        60,                   // TTL
+                        new byte[]{8, 8, 8, 8} // Example IP: 8.8.8.8
+                );
 
-                // Response construction
-                byte[] response;
-                if (supportedQuery) {
-                    // Build the answer section
-                    var answerPacket = DnsAnswer.answer(
-                            question.name(),      // Domain name
-                            question.type(),      // QTYPE
-                            question.clazz(),     // QCLASS
-                            60,                   // TTL
-                            new byte[]{8, 8, 8, 8} // Example IP: 8.8.8.8
-                    );
-
-                    // Combine header, question, and answer
-                    response = new byte[header.length + questionPacket.length + answerPacket.length];
-                    System.arraycopy(header, 0, response, 0, header.length);
-                    System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
-                    System.arraycopy(answerPacket, 0, response, header.length + questionPacket.length, answerPacket.length);
-                } else {
-                    // Unsupported query: Only include header and question
-                    response = new byte[header.length + questionPacket.length];
-                    System.arraycopy(header, 0, response, 0, header.length);
-                    System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
-                }
+                // Combine header, question, and answer sections
+                var response = new byte[header.length + questionPacket.length + answerPacket.length];
+                System.arraycopy(header, 0, response, 0, header.length);
+                System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
+                System.arraycopy(answerPacket, 0, response, header.length + questionPacket.length, answerPacket.length);
 
                 // Send the response
                 var responsePacket = new DatagramPacket(response, response.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
-                System.out.println("Sent response");
+                System.out.println("Sent response with answer section");
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());

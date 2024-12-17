@@ -7,6 +7,7 @@ public class Main {
     public static void main(String[] args) {
         try (var serverSocket = new DatagramSocket(2053)) {
             while (true) {
+                // Buffer to receive the packet
                 var buf = new byte[512];
                 var packet = new DatagramPacket(buf, buf.length);
                 serverSocket.receive(packet);
@@ -23,16 +24,19 @@ public class Main {
                 // Build the question section for the response
                 var questionPacket = DnsQuestion.question(question);
 
-                // Check if the OPCODE is supported (standard query OPCODE = 0)
-                boolean supportedOpcode = question.type() == 1 && question.clazz() == 1;
+                // Check if the query is for QTYPE = 1 (A record) and QCLASS = 1 (IN)
+                boolean supportedQuery = question.type() == 1 && question.clazz() == 1;
 
-                // Build the response
+                // Response construction
                 byte[] response;
-                if (supportedOpcode) {
-                    // Supported query: Add an answer section
+                if (supportedQuery) {
+                    // Build the answer section
                     var answerPacket = DnsAnswer.answer(
-                            question.name(), question.type(), question.clazz(),
-                            60, new byte[]{8, 8, 8, 8} // Example IP: 8.8.8.8
+                            question.name(),      // Domain name
+                            question.type(),      // QTYPE
+                            question.clazz(),     // QCLASS
+                            60,                   // TTL
+                            new byte[]{8, 8, 8, 8} // Example IP: 8.8.8.8
                     );
 
                     // Combine header, question, and answer
@@ -41,7 +45,7 @@ public class Main {
                     System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
                     System.arraycopy(answerPacket, 0, response, header.length + questionPacket.length, answerPacket.length);
                 } else {
-                    // Unsupported query: No answer section, only header and question
+                    // Unsupported query: Only include header and question
                     response = new byte[header.length + questionPacket.length];
                     System.arraycopy(header, 0, response, 0, header.length);
                     System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);

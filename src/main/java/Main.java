@@ -16,7 +16,8 @@ public class Main {
                 var question = DnsMessage.parseQuestion(buf);
 
                 // Build DNS response
-                var header = DnsMessage.header(buf);
+                var header = DnsMessage.header(packet.getData());
+
                 var questionPacket = DnsQuestion.question(question);
                 var answerPacket = DnsAnswer.answer(question.name(), question.type(), question.clazz(), 60, new byte[]{8, 8, 8, 8}); // IP = 8.8.8.8
 

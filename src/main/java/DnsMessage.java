@@ -11,37 +11,30 @@ public final class DnsMessage {
     private static final int RD = 1 << 8; // Recursion Desired
     private static final int RCODE = 0;  // No Error
 
-    public static byte[] headerWithAnswerCount(byte[] received, int answerCount) throws IOException {
-        // Extract ID and flags using DataInputStream
+    public static byte[] headerWithAnswerCount(byte[] received, int answerCount, int rcode) throws IOException {
         try (var inputStream = new ByteArrayInputStream(received);
              var dataInputStream = new DataInputStream(inputStream)) {
 
-            // Read ID and Flags
             final short id = dataInputStream.readShort();
             final short receivedFlags = dataInputStream.readShort();
 
-            // Extract Opcode from received flags
-            int opcode = (receivedFlags >> 11) & 0x0F;
-
-            // Build new flags for the response
             int responseFlags = 1 << 15; // QR = 1 (Response)
-            responseFlags |= opcode << 11; // Preserve Opcode
+            int opcode = (receivedFlags >> 11) & 0x0F;
+            responseFlags |= opcode << 11; // Preserve OPCODE
             responseFlags |= receivedFlags & 0x0100; // Preserve RD
-            responseFlags |= 0; // RCODE = 0 (No Error)
+            responseFlags |= rcode; // Set RCODE (0 or 4)
 
-            // Build and return the header
             return ByteBuffer.allocate(12)
                     .order(BIG_ENDIAN)
                     .putShort(id) // ID
                     .putShort((short) responseFlags) // Flags
-                    .putShort((short) 1) // QDCOUNT (1 question)
-                    .putShort((short) answerCount) // ANCOUNT (1 answer)
+                    .putShort((short) 1) // QDCOUNT
+                    .putShort((short) answerCount) // ANCOUNT (1 for valid query, 0 otherwise)
                     .putShort((short) 0) // NSCOUNT
                     .putShort((short) 0) // ARCOUNT
                     .array();
         }
     }
-
 
     public static Question parseQuestion(byte[] received) throws IOException {
         var inputStream = new ByteArrayInputStream(received, 12, received.length - 12); // Start at question section
@@ -71,6 +64,12 @@ public final class DnsMessage {
         output.write(0); // Null byte terminator
         return output.toByteArray();
     }
+
+    public static boolean isUnsupportedQuery(short flags) {
+        int opcode = (flags >> 11) & 0x0F; // Extract OPCODE (bits 11-14)
+        return opcode != 0; // Unsupported if OPCODE is not 0 (standard query)
+    }
+
 
     public record Question(String name, short type, short clazz) {}
 }

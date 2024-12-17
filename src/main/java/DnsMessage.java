@@ -29,12 +29,17 @@ public final class DnsMessage {
                     .putShort(id) // ID
                     .putShort((short) responseFlags) // Flags
                     .putShort((short) 1) // QDCOUNT
-                    .putShort((short) answerCount) // ANCOUNT (1 for valid query, 0 otherwise)
+                    .putShort((short) answerCount) // ANCOUNT (1 for valid, 0 otherwise)
                     .putShort((short) 0) // NSCOUNT
                     .putShort((short) 0) // ARCOUNT
                     .array();
         }
     }
+
+
+
+
+
 
     public static Question parseQuestion(byte[] received) throws IOException {
         var inputStream = new ByteArrayInputStream(received, 12, received.length - 12); // Start at question section

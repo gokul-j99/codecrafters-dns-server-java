@@ -8,7 +8,7 @@ public class Main {
     public static void main(String[] args) {
         try (var serverSocket = new DatagramSocket(2053)) {
             while (true) {
-                // Receive DNS query
+                // Buffer to receive the query
                 var buf = new byte[512];
                 var packet = new DatagramPacket(buf, buf.length);
                 serverSocket.receive(packet);
@@ -19,12 +19,14 @@ public class Main {
                 System.out.println("Parsed domain: " + question.name());
                 System.out.println("Parsed QTYPE: " + question.type() + ", QCLASS: " + question.clazz());
 
-                // Check for unsupported query type
+                // Check for unsupported query type or class
                 boolean unsupported = question.type() != 1 || question.clazz() != 1;
 
-                // Build DNS response header
-                int rcode = unsupported ? 4 : 0; // 4 = Not Implemented, 0 = No Error
+                // Set RCODE appropriately
+                int rcode = unsupported ? 4 : 0; // 4 = NOT IMPLEMENTED, 0 = NOERROR
                 int ancount = unsupported ? 0 : 1; // No answers for unsupported queries
+
+                // Build the DNS response header
                 var header = DnsMessage.headerWithAnswerCount(packet.getData(), ancount, rcode);
 
                 // Build the question section
@@ -33,17 +35,18 @@ public class Main {
                 byte[] response;
 
                 if (unsupported) {
-                    // For unsupported queries: header + question only
+                    // Unsupported query: Header + Question only
                     response = new byte[header.length + questionPacket.length];
                     System.arraycopy(header, 0, response, 0, header.length);
                     System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
                 } else {
-                    // For supported queries: add answer section
+                    // Supported query: Add the Answer section
                     var answerPacket = DnsAnswer.answer(
                             question.name(), question.type(), question.clazz(),
                             60, new byte[]{8, 8, 8, 8} // IP = 8.8.8.8
                     );
 
+                    // Combine header, question, and answer
                     response = new byte[header.length + questionPacket.length + answerPacket.length];
                     System.arraycopy(header, 0, response, 0, header.length);
                     System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
@@ -53,7 +56,6 @@ public class Main {
                 // Send the DNS response
                 var responsePacket = new DatagramPacket(response, response.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
-
                 System.out.println("Sent response with RCODE: " + rcode);
             }
         } catch (IOException e) {

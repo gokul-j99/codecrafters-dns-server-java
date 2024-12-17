@@ -12,30 +12,45 @@ public class Main {
                 serverSocket.receive(packet);
                 System.out.println("Received data");
 
-                // Parse question
-                var question = DnsMessage.parseQuestion(buf);
+                // Parse the question section
+                var question = DnsMessage.parseQuestion(packet.getData());
+                System.out.println("Parsed domain: " + question.name());
+                System.out.println("Parsed QTYPE: " + question.type() + ", QCLASS: " + question.clazz());
 
-                // Build DNS response
+                // Build DNS response header
                 var header = DnsMessage.header(packet.getData());
 
+                // Build the question section for the response
                 var questionPacket = DnsQuestion.question(question);
-                var answerPacket = DnsAnswer.answer(
-                        question.name(),        // Domain name from the question
-                        question.type(),        // QTYPE (should be 1)
-                        question.clazz(),       // QCLASS (should be 1)
-                        60,                     // TTL
-                        new byte[]{8, 8, 8, 8}  // IP Address = 8.8.8.8
-                );
 
-                // Combine all parts into the response
-                var response = new byte[header.length + questionPacket.length + answerPacket.length];
-                System.arraycopy(header, 0, response, 0, header.length);
-                System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
-                System.arraycopy(answerPacket, 0, response, header.length + questionPacket.length, answerPacket.length);
+                // Check if the OPCODE is supported (standard query OPCODE = 0)
+                boolean supportedOpcode = question.type() == 1 && question.clazz() == 1;
 
-                // Send response
+                // Build the response
+                byte[] response;
+                if (supportedOpcode) {
+                    // Supported query: Add an answer section
+                    var answerPacket = DnsAnswer.answer(
+                            question.name(), question.type(), question.clazz(),
+                            60, new byte[]{8, 8, 8, 8} // Example IP: 8.8.8.8
+                    );
+
+                    // Combine header, question, and answer
+                    response = new byte[header.length + questionPacket.length + answerPacket.length];
+                    System.arraycopy(header, 0, response, 0, header.length);
+                    System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
+                    System.arraycopy(answerPacket, 0, response, header.length + questionPacket.length, answerPacket.length);
+                } else {
+                    // Unsupported query: No answer section, only header and question
+                    response = new byte[header.length + questionPacket.length];
+                    System.arraycopy(header, 0, response, 0, header.length);
+                    System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
+                }
+
+                // Send the response
                 var responsePacket = new DatagramPacket(response, response.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
+                System.out.println("Sent response");
             }
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());

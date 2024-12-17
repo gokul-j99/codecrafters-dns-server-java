@@ -19,7 +19,13 @@ public class Main {
                 var header = DnsMessage.header(packet.getData());
 
                 var questionPacket = DnsQuestion.question(question);
-                var answerPacket = DnsAnswer.answer(question.name(), question.type(), question.clazz(), 60, new byte[]{8, 8, 8, 8}); // IP = 8.8.8.8
+                var answerPacket = DnsAnswer.answer(
+                        question.name(),        // Domain name from the question
+                        question.type(),        // QTYPE (should be 1)
+                        question.clazz(),       // QCLASS (should be 1)
+                        60,                     // TTL
+                        new byte[]{8, 8, 8, 8}  // IP Address = 8.8.8.8
+                );
 
                 // Combine all parts into the response
                 var response = new byte[header.length + questionPacket.length + answerPacket.length];

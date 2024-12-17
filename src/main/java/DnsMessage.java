@@ -54,8 +54,9 @@ public final class DnsMessage {
         }
         domainName.setLength(domainName.length() - 1); // Remove trailing dot
 
-        var qtype = ByteBuffer.wrap(received, inputStream.available() - 4, 2).order(BIG_ENDIAN).getShort();
-        var qclass = ByteBuffer.wrap(received, inputStream.available() - 2, 2).order(BIG_ENDIAN).getShort();
+        // Read QTYPE and QCLASS
+        var qtype = (short) ((inputStream.read() << 8) | inputStream.read());
+        var qclass = (short) ((inputStream.read() << 8) | inputStream.read());
 
         return new Question(domainName.toString(), qtype, qclass);
     }

@@ -11,8 +11,8 @@ public class DnsAnswer {
 
         // Add TYPE (2 bytes) and CLASS (2 bytes)
         output.write(new byte[]{
-                (byte) (type >> 8), (byte) (type & 0xFF), // TYPE = 1 for A record
-                (byte) (clazz >> 8), (byte) (clazz & 0xFF)  // CLASS = 1 for IN
+                (byte) (type >> 8), (byte) (type & 0xFF), // TYPE = 1 (A record)
+                (byte) (clazz >> 8), (byte) (clazz & 0xFF) // CLASS = 1 (IN)
         });
 
         // Add TTL (4 bytes)

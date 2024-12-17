@@ -11,7 +11,7 @@ public final class DnsMessage {
     private static final int RD = 1 << 8; // Recursion Desired
     private static final int RCODE = 0;  // No Error
 
-    public static byte[] header(byte[] received) throws IOException {
+    public static byte[] headerWithAnswerCount(byte[] received, int answerCount) throws IOException {
         // Extract ID and flags using DataInputStream
         try (var inputStream = new ByteArrayInputStream(received);
              var dataInputStream = new DataInputStream(inputStream)) {
@@ -23,14 +23,11 @@ public final class DnsMessage {
             // Extract Opcode from received flags
             int opcode = (receivedFlags >> 11) & 0x0F;
 
-            // Determine RCODE
-            int rcode = (opcode == 0) ? 0 : 4; // Set RCODE = 4 if OPCODE is not 0 (standard query)
-
             // Build new flags for the response
             int responseFlags = 1 << 15; // QR = 1 (Response)
             responseFlags |= opcode << 11; // Preserve Opcode
-            responseFlags |= receivedFlags & RD; // Preserve RD
-            responseFlags |= rcode; // Set RCODE conditionally
+            responseFlags |= receivedFlags & 0x0100; // Preserve RD
+            responseFlags |= 0; // RCODE = 0 (No Error)
 
             // Build and return the header
             return ByteBuffer.allocate(12)
@@ -38,12 +35,13 @@ public final class DnsMessage {
                     .putShort(id) // ID
                     .putShort((short) responseFlags) // Flags
                     .putShort((short) 1) // QDCOUNT (1 question)
-                    .putShort((short) 0) // ANCOUNT (0 answers for unsupported queries)
+                    .putShort((short) answerCount) // ANCOUNT (1 answer)
                     .putShort((short) 0) // NSCOUNT
                     .putShort((short) 0) // ARCOUNT
                     .array();
         }
     }
+
 
     public static Question parseQuestion(byte[] received) throws IOException {
         var inputStream = new ByteArrayInputStream(received, 12, received.length - 12); // Start at question section

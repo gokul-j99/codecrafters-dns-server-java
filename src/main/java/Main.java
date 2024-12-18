@@ -47,12 +47,8 @@ public class Main {
                 DataOutputStream output = new DataOutputStream(response);
 
                 // Header
-                output.writeShort(id); // ID
-                output.writeShort(unsupported ? 0x8184 : 0x8180); // Flags: QR=1, RA=0, RCODE=4 for unsupported
-                output.writeShort(qdCount); // QDCOUNT
-                output.writeShort(unsupported ? 0 : qdCount); // ANCOUNT = 0 if unsupported
-                output.writeShort(0); // NSCOUNT
-                output.writeShort(0); // ARCOUNT
+                byte[] header = DnsMessage.headerWithAnswerCount(buf, unsupported ? 0 : qdCount, unsupported ? 4 : 0);
+                output.write(header);
 
                 // Question section
                 for (String domain : questions) {

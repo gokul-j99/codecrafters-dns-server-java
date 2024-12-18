@@ -3,6 +3,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
 import static java.nio.ByteOrder.BIG_ENDIAN;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -84,6 +87,35 @@ public final class DnsMessage {
             short flags = dataInputStream.readShort();
             return (flags >> 11) & 0x0F; // Extract OPCODE (bits 11-14)
         }
+    }
+
+    public static String readDomainName(DataInputStream input, byte[] packet) throws IOException {
+        StringBuilder domain = new StringBuilder();
+        Map<Integer, String> labelCache = new HashMap<>();
+
+        while (true) {
+            int length = input.readUnsignedByte();
+
+            // Check for compression (0xC0)
+            if ((length & 0xC0) == 0xC0) {
+                int pointer = ((length & 0x3F) << 8) | input.readUnsignedByte();
+                if (labelCache.containsKey(pointer)) {
+                    domain.append(labelCache.get(pointer));
+                } else {
+                    domain.append(readDomainName(new DataInputStream(new java.io.ByteArrayInputStream(packet, pointer, packet.length - pointer)), packet));
+                }
+                break;
+            } else if (length == 0) {
+                break; // End of label
+            } else {
+                byte[] label = new byte[length];
+                input.readFully(label);
+                String part = new String(label);
+                domain.append(part).append(".");
+                labelCache.put(input.available(), part);
+            }
+        }
+        return domain.toString().replaceAll("\\.$", ""); // Remove trailing dot
     }
 
 

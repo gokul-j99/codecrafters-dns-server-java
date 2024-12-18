@@ -1,68 +1,78 @@
-import java.io.IOException;
+import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Main {
 
     public static void main(String[] args) {
-        try (var serverSocket = new DatagramSocket(2053)) {
+        try (DatagramSocket serverSocket = new DatagramSocket(2053)) {
             while (true) {
-                // Receive DNS query
-                var buf = new byte[512];
-                var packet = new DatagramPacket(buf, buf.length);
+                // Receive packet
+                byte[] buf = new byte[512];
+                DatagramPacket packet = new DatagramPacket(buf, buf.length);
                 serverSocket.receive(packet);
                 System.out.println("Received data");
 
-                // Extract OPCODE
-                int opcode = DnsMessage.getOpcode(packet.getData());
-                System.out.println("Received OPCODE: " + opcode);
+                // Parse the DNS header and question section
+                DataInputStream input = new DataInputStream(new ByteArrayInputStream(buf));
+                short id = input.readShort();
+                short flags = input.readShort();
+                short qdCount = input.readShort();
+                input.readShort(); // ANCOUNT
+                input.readShort(); // NSCOUNT
+                input.readShort(); // ARCOUNT
 
-                // Parse the question section
-                var question = DnsMessage.parseQuestion(packet.getData());
-                System.out.println("Parsed domain: " + question.name());
-                System.out.println("Parsed QTYPE: " + question.type() + ", QCLASS: " + question.clazz());
-
-                // Check for unsupported OPCODE
-                boolean unsupported = opcode != 0; // Only support OPCODE = 0 (QUERY)
-
-                // Set RCODE appropriately
-                int rcode = unsupported ? 4 : 0; // 4 = NOT IMPLEMENTED, 0 = NOERROR
-                int ancount = unsupported ? 0 : 1; // No answers for unsupported queries
-
-                // Build DNS response header
-                var header = DnsMessage.headerWithAnswerCount(packet.getData(), ancount, rcode);
-
-                // Build the question section
-                var questionPacket = DnsQuestion.question(question);
-
-                byte[] response;
-
-                if (unsupported) {
-                    // Unsupported query: Header + Question only
-                    response = new byte[header.length + questionPacket.length];
-                    System.arraycopy(header, 0, response, 0, header.length);
-                    System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
-                } else {
-                    // Supported query: Add the Answer section
-                    var answerPacket = DnsAnswer.answer(
-                            question.name(), question.type(), question.clazz(),
-                            60, new byte[]{8, 8, 8, 8} // IP = 8.8.8.8
-                    );
-
-                    // Combine all sections
-                    response = new byte[header.length + questionPacket.length + answerPacket.length];
-                    System.arraycopy(header, 0, response, 0, header.length);
-                    System.arraycopy(questionPacket, 0, response, header.length, questionPacket.length);
-                    System.arraycopy(answerPacket, 0, response, header.length + questionPacket.length, answerPacket.length);
+                List<String> questions = new ArrayList<>();
+                for (int i = 0; i < qdCount; i++) {
+                    questions.add(DnsMessage.readDomainName(input, buf));
+                    input.readShort(); // QTYPE
+                    input.readShort(); // QCLASS
                 }
 
-                // Send the DNS response
-                var responsePacket = new DatagramPacket(response, response.length, packet.getSocketAddress());
+                // Debug parsed domains
+                for (String domain : questions) {
+                    System.out.println("Parsed domain: " + domain);
+                }
+
+                // Build response
+                ByteArrayOutputStream response = new ByteArrayOutputStream();
+                DataOutputStream output = new DataOutputStream(response);
+
+                // Header
+                output.writeShort(id); // ID
+                output.writeShort(0x8180); // Flags: QR=1, RD=1, RA=0, NOERROR
+                output.writeShort(qdCount); // QDCOUNT
+                output.writeShort(qdCount); // ANCOUNT = same as questions count
+                output.writeShort(0); // NSCOUNT
+                output.writeShort(0); // ARCOUNT
+
+                // Question section
+                for (String domain : questions) {
+                    output.write(DnsMessage.encodeDomain(domain));
+                    output.writeShort(1); // QTYPE=A
+                    output.writeShort(1); // QCLASS=IN
+                }
+
+                // Answer section (dummy A records)
+                for (String domain : questions) {
+                    output.write(DnsMessage.encodeDomain(domain));
+                    output.writeShort(1); // TYPE=A
+                    output.writeShort(1); // CLASS=IN
+                    output.writeInt(60); // TTL
+                    output.writeShort(4); // RDLENGTH
+                    output.write(new byte[]{8, 8, 8, 8}); // Dummy IP 8.8.8.8
+                }
+
+                // Send response
+                byte[] responseData = response.toByteArray();
+                DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
-                System.out.println("Sent response with RCODE: " + rcode);
+                System.out.println("Sent response with answers");
             }
         } catch (IOException e) {
-            System.out.println("IOException: " + e.getMessage());
+            System.err.println("IOException: " + e.getMessage());
         }
     }
 }

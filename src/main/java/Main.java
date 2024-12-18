@@ -7,7 +7,7 @@ import java.util.List;
 public class Main {
 
     public static void main(String[] args) {
-        try (DatagramSocket serverSocket = new DatagramSocket(2053)) {
+        try (var serverSocket = new DatagramSocket(2053)) {
             while (true) {
                 // Receive packet
                 byte[] buf = new byte[512];
@@ -15,7 +15,10 @@ public class Main {
                 serverSocket.receive(packet);
                 System.out.println("Received data");
 
-                // Parse the DNS header and question section
+                // Parse OPCODE and question section
+                int opcode = DnsMessage.getOpcode(buf);
+                System.out.println("Received OPCODE: " + opcode);
+
                 DataInputStream input = new DataInputStream(new ByteArrayInputStream(buf));
                 short id = input.readShort();
                 short flags = input.readShort();
@@ -36,15 +39,18 @@ public class Main {
                     System.out.println("Parsed domain: " + domain);
                 }
 
+                // Handle unsupported OPCODEs
+                boolean unsupported = opcode != 0;
+
                 // Build response
                 ByteArrayOutputStream response = new ByteArrayOutputStream();
                 DataOutputStream output = new DataOutputStream(response);
 
                 // Header
                 output.writeShort(id); // ID
-                output.writeShort(0x8180); // Flags: QR=1, RD=1, RA=0, NOERROR
+                output.writeShort(unsupported ? 0x8184 : 0x8180); // Flags: QR=1, RA=0, RCODE=4 for unsupported
                 output.writeShort(qdCount); // QDCOUNT
-                output.writeShort(qdCount); // ANCOUNT = same as questions count
+                output.writeShort(unsupported ? 0 : qdCount); // ANCOUNT = 0 if unsupported
                 output.writeShort(0); // NSCOUNT
                 output.writeShort(0); // ARCOUNT
 
@@ -55,21 +61,23 @@ public class Main {
                     output.writeShort(1); // QCLASS=IN
                 }
 
-                // Answer section (dummy A records)
-                for (String domain : questions) {
-                    output.write(DnsMessage.encodeDomain(domain));
-                    output.writeShort(1); // TYPE=A
-                    output.writeShort(1); // CLASS=IN
-                    output.writeInt(60); // TTL
-                    output.writeShort(4); // RDLENGTH
-                    output.write(new byte[]{8, 8, 8, 8}); // Dummy IP 8.8.8.8
+                // Answer section (only for supported OPCODE)
+                if (!unsupported) {
+                    for (String domain : questions) {
+                        output.write(DnsMessage.encodeDomain(domain));
+                        output.writeShort(1); // TYPE=A
+                        output.writeShort(1); // CLASS=IN
+                        output.writeInt(60); // TTL
+                        output.writeShort(4); // RDLENGTH
+                        output.write(new byte[]{8, 8, 8, 8}); // Dummy IP 8.8.8.8
+                    }
                 }
 
                 // Send response
                 byte[] responseData = response.toByteArray();
                 DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
-                System.out.println("Sent response with answers");
+                System.out.println("Sent response with RCODE: " + (unsupported ? 4 : 0));
             }
         } catch (IOException e) {
             System.err.println("IOException: " + e.getMessage());

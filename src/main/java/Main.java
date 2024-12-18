@@ -47,7 +47,7 @@ public class Main {
                 DataOutputStream output = new DataOutputStream(response);
 
                 // Header
-                byte[] header = DnsMessage.headerWithAnswerCount(buf, unsupported ? 0 : qdCount, unsupported ? 4 : 0);
+                byte[] header = DnsMessage.headerWithAnswerCount(buf, unsupported ? 0 : questions.size(), unsupported ? 4 : 0);
                 output.write(header);
 
                 // Question section
@@ -69,8 +69,14 @@ public class Main {
                     }
                 }
 
-                // Send response
+                // Ensure response size is within the limit
                 byte[] responseData = response.toByteArray();
+                if (responseData.length > 512) {
+                    System.err.println("Error: Response size exceeds 512 bytes. Truncating.");
+                    responseData = truncateResponse(responseData, 512);
+                }
+
+                // Send response
                 DatagramPacket responsePacket = new DatagramPacket(responseData, responseData.length, packet.getSocketAddress());
                 serverSocket.send(responsePacket);
                 System.out.println("Sent response with RCODE: " + (unsupported ? 4 : 0));
@@ -78,5 +84,12 @@ public class Main {
         } catch (IOException e) {
             System.err.println("IOException: " + e.getMessage());
         }
+    }
+
+    // Helper function to truncate response
+    private static byte[] truncateResponse(byte[] responseData, int maxLength) {
+        byte[] truncated = new byte[maxLength];
+        System.arraycopy(responseData, 0, truncated, 0, maxLength);
+        return truncated;
     }
 }

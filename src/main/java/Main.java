@@ -6,11 +6,13 @@ import java.util.List;
 
 public class Main {
 
+    private static final int MAX_DNS_PACKET_SIZE = 512;
+
     public static void main(String[] args) {
         try (var serverSocket = new DatagramSocket(2053)) {
             while (true) {
                 // Receive packet
-                byte[] buf = new byte[512];
+                byte[] buf = new byte[MAX_DNS_PACKET_SIZE];
                 DatagramPacket packet = new DatagramPacket(buf, buf.length);
                 serverSocket.receive(packet);
                 System.out.println("Received data");
@@ -69,11 +71,11 @@ public class Main {
                     }
                 }
 
-                // Ensure response size is within the limit
+                // Validate response size
                 byte[] responseData = response.toByteArray();
-                if (responseData.length > 512) {
+                if (responseData.length > MAX_DNS_PACKET_SIZE) {
                     System.err.println("Error: Response size exceeds 512 bytes. Truncating.");
-                    responseData = truncateResponse(responseData, 512);
+                    responseData = truncateResponse(responseData, MAX_DNS_PACKET_SIZE);
                 }
 
                 // Send response

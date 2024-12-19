@@ -1,8 +1,10 @@
 import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.StringJoiner;
 
 public class Main {
 
@@ -31,7 +33,7 @@ public class Main {
 
                 List<String> questions = new ArrayList<>();
                 for (int i = 0; i < qdCount; i++) {
-                    questions.add(DnsMessage.readDomainName(input, buf));
+                    questions.add(readCompressedDomainName(ByteBuffer.wrap(buf)));
                     input.readShort(); // QTYPE
                     input.readShort(); // QCLASS
                 }
@@ -88,6 +90,34 @@ public class Main {
         }
     }
 
+    private static String readCompressedDomainName(ByteBuffer buffer) {
+        byte labelLength;
+        StringJoiner labels = new StringJoiner(".");
+
+        boolean compressed = false;
+        int position = 0;
+
+        while ((labelLength = buffer.get()) != 0) {
+            if ((labelLength & 0xC0) == 0xC0) {
+                compressed = true;
+                // Handle pointer compression
+                int offset = ((labelLength & 0x3F) << 8) | (buffer.get() & 0xFF);
+                position = buffer.position();
+                buffer.position(offset);
+            } else {
+                byte[] label = new byte[labelLength];
+                buffer.get(label);
+                labels.add(new String(label));
+            }
+        }
+
+        if (compressed) {
+            buffer.position(position);
+        }
+
+        return labels.toString();
+    }
+
     // Helper function to truncate response
     private static byte[] truncateResponse(byte[] responseData, int maxLength) {
         byte[] truncated = new byte[maxLength];
@@ -95,4 +125,3 @@ public class Main {
         return truncated;
     }
 }
-
